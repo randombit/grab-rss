@@ -1,0 +1,122 @@
+#!/usr/bin/python
+
+import feedparser
+import stripogram
+import dateutil.parser
+import urllib2
+import sys
+import os
+import smtplib
+
+from email.MIMEText import MIMEText
+from django.utils.encoding import smart_str
+
+def conf_dir():
+    if os.getenv('GRAB_RSS_DIR'):
+        return os.getenv('GRAB_RSS_DIR')
+    return os.path.join(os.getenv('HOME'), '.grab_rss')
+
+def feedlist():
+    feed_file = os.path.join(conf_dir(), 'feeds.txt')
+    try:
+        input = open(feed_file)
+    except IOError:
+        raise Exception('No feeds found in %s' % (feed_file))
+
+    for line in input:
+        yield line
+
+class seen_items:
+    def __init__(self, filename):
+        self.all_seen = set()
+        self.filename = filename
+
+        try:
+            input = open(self.filename)
+            for line in input:
+                self.all_seen.add(line.strip())
+        except IOError:
+            pass
+
+    def save(self):
+        output = open(self.filename, 'w')
+        for entry in sorted(self.all_seen):
+            output.write(entry)
+            output.write('\n')
+        output.close()
+
+    def seen_this_before(self, item):
+        return item in self.all_seen
+
+    def note_as_seen(self, item):
+        self.all_seen.add(item)
+
+
+def wrap(text, width):
+    # http://code.activestate.com/recipes/148061/
+    return reduce(lambda line, word, width=width: '%s%s%s' %
+                  (line,
+                   ' \n'[(len(line)-line.rfind('\n')-1
+                         + len(word.split('\n',1)[0]
+                              ) >= width)],
+                   word),
+                  text.split(' ')
+                 )
+
+def body_for(entry):
+
+    encodings = {
+        '\xe2\x80\x93': '\'',
+        '\xe2\x80\x99': '\'',
+        '\xe2\x80\x9c': '\'',
+        '\xe2\x80\x9d': '\'',
+        '\xc3\xa1': 'a',
+        '\xc2\xa0': '',
+        '\xbb': '>>',
+        '&#160;': ' ',
+        '&#8217;': '\'',
+        '&#8220;': '\'',
+        '&#8221;': '\'',
+        }
+
+    s = smart_str(entry.link + "\n\n" + entry.description)
+
+    for (coded,char) in encodings.items():
+        s = s.replace(coded, char)
+
+    return wrap(stripogram.html2safehtml(s, valid_tags=('a')), 80)
+
+def grab_feeds():
+    state = seen_items(os.path.join(conf_dir(), 'seen.txt'))
+
+    for feed_url in feedlist():
+        feed = feedparser.parse(feed_url)
+
+        feed_title = feed['feed']['title']
+
+        for entry in feed.entries:
+            if state.seen_this_before(entry.link):
+                continue
+
+            msg = MIMEText(body_for(entry))
+            msg['Subject'] = 'GrabRSS: %s - %s' % (feed_title, entry.title)
+            msg['From'] = 'grab-rss@randombit.net'
+            msg['To'] = 'lloyd@randombit.net'
+            yield msg
+
+            state.note_as_seen(entry.link)
+        state.save()
+
+def main(args = None):
+    if args is None:
+        args = sys.argv
+
+    for email in grab_feeds():
+        print email
+        print "\n"
+
+if __name__ == '__main__':
+    #try:
+    sys.exit(main())
+    #except Exception, e:
+    #    print >>sys.stderr, e
