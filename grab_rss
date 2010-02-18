@@ -25,12 +25,9 @@ def feedlist():
     logging.info('Reading feed list from %s' % (feed_file))
 
     try:
-        input = open(feed_file)
+        return map(lambda s: s.strip(), open(feed_file).readlines())
     except IOError:
         raise Exception('No feeds found in %s' % (feed_file))
-
-    for line in input:
-        yield line.strip()
 
 def read_config():
     config = ConfigParser.RawConfigParser(
@@ -129,17 +126,20 @@ def feed_name(feed, feed_url):
 def grab_feeds(from_addr, to_addr):
     state = seen_items(os.path.join(conf_dir(), 'seen.txt'))
 
-    hostname = socket.gethostname()
+    def parse_feed(url):
+        logging.info('Reading %s' % (url))
+        return (url, feedparser.parse(url))
 
-    for feed_url in feedlist():
-        logging.info('Reading %s' % (feed_url))
+    # Use multiprocessing's Pool.map? (Broken on chihiro... :/)
+    all_feeds = dict(map(parse_feed, feedlist()))
 
-        feed = feedparser.parse(feed_url)
-
+    for (feed_url, feed) in all_feeds.items():
         feed_title = feed_name(feed, feed_url)
 
-        if len(feed.entries):
-            logging.debug('Found %d entries in %s' % (len(feed.entries), feed_url))
+        num_entries = len(feed.entries)
+
+        if num_entries:
+            logging.debug('Found %d entries in %s' % (num_entries, feed_url))
         else:
             logging.info('Found no entries in %s' % (feed_url))
 
@@ -152,7 +152,7 @@ def grab_feeds(from_addr, to_addr):
             title = entry.get('title', entry.link)
 
             msg = MIMEText(body_for(entry))
-            msg['X-GrabRSS'] = hostname
+            msg['X-GrabRSS'] = socket.gethostname()
             msg['Subject'] = '%s - %s' % (feed_title, title)
             msg['From'] = from_addr
             msg['To'] = to_addr
@@ -172,8 +172,11 @@ def main(argv = None):
 
     parser = optparse.OptionParser(version='%prog 0.1')
 
-    parser.add_option('-v', '--verbose', action='store_true', dest='verbose', default=False)
-    parser.add_option('-q', '--quiet', action='store_true', dest='quiet', default=False)
+    parser.add_option('-v', '--verbose', dest='verbose',
+                      action='store_true', default=False)
+
+    parser.add_option('-q', '--quiet', dest='quiet',
+                      action='store_true', default=False)
 
     (options, args) = parser.parse_args(argv)
 
@@ -195,7 +198,11 @@ def main(argv = None):
 
     socket.setdefaulttimeout(10)
 
-    smtp = smtplib.SMTP(config.get('GrabRSS', 'smtp_host'))
+    smtp_host = config.get('GrabRSS', 'smtp_host')
+
+    logging.debug('Sending mail to %s' % (smtp_host))
+
+    smtp = smtplib.SMTP(smtp_host)
 
     for email in grab_feeds(config.get('GrabRSS', 'from'),
                             config.get('GrabRSS', 'to')):
