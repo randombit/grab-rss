@@ -3,11 +3,13 @@
 import feedparser
 import stripogram
 import dateutil.parser
-import urllib2
+import optparse
 import sys
 import os
 import smtplib
 import socket
+import logging
+import ConfigParser
 
 from email.MIMEText import MIMEText
 from django.utils.encoding import smart_str
@@ -19,13 +21,34 @@ def conf_dir():
 
 def feedlist():
     feed_file = os.path.join(conf_dir(), 'feeds.txt')
+
+    logging.info('Reading feed list from %s' % (feed_file))
+
     try:
         input = open(feed_file)
     except IOError:
         raise Exception('No feeds found in %s' % (feed_file))
 
     for line in input:
-        yield line
+        yield line.strip()
+
+def read_config():
+    config = ConfigParser.RawConfigParser(
+        {
+            'from': 'grab-rss@localhost',
+            'smtp_host': 'localhost',
+            'socket_timeout': '30',
+            'user_agent': feedparser.USER_AGENT
+        })
+
+    config_file = os.path.join(conf_dir(), 'grab_rss.conf')
+
+    try:
+        config.readfp(open(config_file))
+    except IOError:
+        pass
+
+    return config
 
 class seen_items:
     def __init__(self, filename):
@@ -89,7 +112,7 @@ def body_for(entry):
 
     timestamp = str(dateutil.parser.parse(entry.get('date', '')))
 
-    s = timestamp + "\n\n" + smart_str(entry.link + '\n\n' +
+    s = timestamp + '\n\n' + smart_str(entry.link + '\n\n' +
                                        entry.get('description', ''))
 
     for (coded,char) in encodings.items():
@@ -103,15 +126,24 @@ def feed_name(feed, feed_url):
     except:
         return feed_url.split('/')[3]
 
-def grab_feeds():
+def grab_feeds(from_addr, to_addr):
     state = seen_items(os.path.join(conf_dir(), 'seen.txt'))
 
     hostname = socket.gethostname()
 
     for feed_url in feedlist():
+        logging.info('Reading %s' % (feed_url))
+
         feed = feedparser.parse(feed_url)
 
         feed_title = feed_name(feed, feed_url)
+
+        if len(feed.entries):
+            logging.debug('Found %d entries in %s' % (len(feed.entries), feed_url))
+        else:
+            logging.info('Found no entries in %s' % (feed_url))
+
+        new_entries = 0
 
         for entry in feed.entries:
             if state.seen_this_before(entry.link):
@@ -122,24 +154,51 @@ def grab_feeds():
             msg = MIMEText(body_for(entry))
             msg['X-GrabRSS'] = hostname
             msg['Subject'] = '%s - %s' % (feed_title, title)
-            msg['From'] = 'grab-rss@randombit.net'
-            msg['To'] = 'lloyd@randombit.net'
+            msg['From'] = from_addr
+            msg['To'] = to_addr
             yield msg
 
+            new_entries += 1
+
             state.note_as_seen(entry.link)
+
+        logging.debug('Saw %d new items from %s' % (new_entries, feed_url))
+
         state.save()
 
-def main(args = None):
-    if args is None:
-        args = sys.argv
+def main(argv = None):
+    if argv is None:
+        argv = sys.argv
 
-    #feedparser.USER_AGENT = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1)"
+    parser = optparse.OptionParser(version='%prog 0.1')
+
+    parser.add_option('-v', '--verbose', action='store_true', dest='verbose', default=False)
+    parser.add_option('-q', '--quiet', action='store_true', dest='quiet', default=False)
+
+    (options, args) = parser.parse_args(argv)
+
+    def log_level():
+        if options.quiet: # -q overrides -v
+            return logging.WARNING
+        if options.verbose:
+            return logging.DEBUG
+        return logging.INFO
+
+    logging.basicConfig(stream = sys.stdout,
+                        format = '%(levelname) 7s: %(message)s',
+                        level = log_level())
+
+    config = read_config()
+
+    socket.setdefaulttimeout(config.getint('GrabRSS', 'socket_timeout'))
+    feedparser.USER_AGENT = config.get('GrabRSS', 'user_agent')
 
     socket.setdefaulttimeout(10)
 
-    smtp = smtplib.SMTP('mail.randombit.net')
+    smtp = smtplib.SMTP(config.get('GrabRSS', 'smtp_host'))
 
-    for email in grab_feeds():
+    for email in grab_feeds(config.get('GrabRSS', 'from'),
+                            config.get('GrabRSS', 'to')):
         smtp.sendmail(email['From'], [email['To']], email.as_string())
 
     smtp.quit()
