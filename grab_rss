@@ -51,9 +51,8 @@ class seen_items:
     def note_as_seen(self, item):
         self.all_seen.add(item)
 
-
 def wrap(text, width):
-    # http://code.activestate.com/recipes/148061/
+    # From http://code.activestate.com/recipes/148061/
     return reduce(lambda line, word, width=width: '%s%s%s' %
                   (line,
                    ' \n'[(len(line)-line.rfind('\n')-1
@@ -65,6 +64,7 @@ def wrap(text, width):
 
 def body_for(entry):
 
+    # Random chars observered that smart_str fails on
     encodings = {
         '\xe2\x80\x93': '\'',
         '\xe2\x80\x99': '\'',
@@ -89,6 +89,8 @@ def body_for(entry):
 def grab_feeds():
     state = seen_items(os.path.join(conf_dir(), 'seen.txt'))
 
+    hostname = os.uname()[1]
+
     for feed_url in feedlist():
         feed = feedparser.parse(feed_url)
 
@@ -99,7 +101,8 @@ def grab_feeds():
                 continue
 
             msg = MIMEText(body_for(entry))
-            msg['Subject'] = 'GrabRSS: %s - %s' % (feed_title, entry.title)
+            msg['X-GrabRSS'] = hostname
+            msg['Subject'] = '%s - %s' % (feed_title, entry.title)
             msg['From'] = 'grab-rss@randombit.net'
             msg['To'] = 'lloyd@randombit.net'
             yield msg
