@@ -1,14 +1,15 @@
 #!/usr/bin/python
 
-import feedparser
-import stripogram
 import dateutil.parser
+import feedparser
+import logging
+import multiprocessing
 import optparse
-import sys
 import os
 import smtplib
 import socket
-import logging
+import stripogram
+import sys
 import ConfigParser
 
 from email.MIMEText import MIMEText
@@ -35,7 +36,8 @@ def read_config():
             'from': 'grab-rss@localhost',
             'smtp_host': 'localhost',
             'socket_timeout': '30',
-            'user_agent': feedparser.USER_AGENT
+            'user_agent': feedparser.USER_AGENT,
+            'pool_size': 4
         })
 
     config_file = os.path.join(conf_dir(), 'grab_rss.conf')
@@ -123,15 +125,17 @@ def feed_name(feed, feed_url):
     except:
         return feed_url.split('/')[3]
 
-def grab_feeds(from_addr, to_addr):
+def parse_feed(url):
+    logging.info('Reading %s' % (url))
+    return (url, feedparser.parse(url))
+
+def grab_feeds(config):
     state = seen_items(os.path.join(conf_dir(), 'seen.txt'))
 
-    def parse_feed(url):
-        logging.info('Reading %s' % (url))
-        return (url, feedparser.parse(url))
+    pool = multiprocessing.Pool(config.getint('GrabRSS', 'pool_size'))
 
     # Use multiprocessing's Pool.map? (Broken on chihiro... :/)
-    all_feeds = dict(map(parse_feed, feedlist()))
+    all_feeds = dict(pool.map(parse_feed, feedlist()))
 
     for (feed_url, feed) in all_feeds.items():
         feed_title = feed_name(feed, feed_url)
@@ -154,8 +158,8 @@ def grab_feeds(from_addr, to_addr):
             msg = MIMEText(body_for(entry))
             msg['X-GrabRSS'] = socket.gethostname()
             msg['Subject'] = '%s - %s' % (feed_title, title)
-            msg['From'] = from_addr
-            msg['To'] = to_addr
+            msg['From'] = config.get('GrabRSS', 'from')
+            msg['To'] = config.get('GrabRSS', 'to')
             yield msg
 
             new_entries += 1
@@ -204,8 +208,7 @@ def main(argv = None):
 
     smtp = smtplib.SMTP(smtp_host)
 
-    for email in grab_feeds(config.get('GrabRSS', 'from'),
-                            config.get('GrabRSS', 'to')):
+    for email in grab_feeds(config):
         smtp.sendmail(email['From'], [email['To']], email.as_string())
 
     smtp.quit()
