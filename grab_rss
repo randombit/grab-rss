@@ -8,11 +8,12 @@ Dependencies:
   django          - http://www.djangoproject.com
 """
 
-__copyright__ = "Copyright 2010, Jack Lloyd"
-__license__   = "GPLv2"
-__author__    = "Jack Lloyd"
-__version__   = "0.1"
-__email__     = "lloyd@randombit.net"
+__copyright__ = 'Copyright 2010, Jack Lloyd'
+__license__   = 'GPLv2'
+__author__    = 'Jack Lloyd'
+__version__   = '0.1'
+__email__     = 'lloyd@randombit.net'
+__url__       = 'http://www.randombit.net/bitbashing/grab_rss'
 
 import logging
 import multiprocessing
@@ -51,7 +52,7 @@ def read_config():
             'from': 'grab-rss@localhost',
             'smtp_host': 'localhost',
             'socket_timeout': '30',
-            'user_agent': feedparser.USER_AGENT,
+            'user_agent': 'grab_rss ' + __version__ + ' ' + __url__,
             'pool_size': 4
         })
 
