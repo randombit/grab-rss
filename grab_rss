@@ -75,6 +75,7 @@ def body_for(entry):
         '\xc2\xa0': '',
         '\xbb': '>>',
         '&#38;': '&',
+        '&#038;': '&',
         '&#60;': '<',
         '&#62;': '>',
         '&#xA0;': ' ',
@@ -86,7 +87,10 @@ def body_for(entry):
         '&#8243;': '"',
         }
 
-    s = smart_str(entry.link + '\n\n' + entry.get('description', ''))
+    timestamp = str(dateutil.parser.parse(entry.get('date', '')))
+
+    s = timestamp + "\n\n" + smart_str(entry.link + '\n\n' +
+                                       entry.get('description', ''))
 
     for (coded,char) in encodings.items():
         s = s.replace(coded, char)
@@ -128,6 +132,8 @@ def grab_feeds():
 def main(args = None):
     if args is None:
         args = sys.argv
+
+    #feedparser.USER_AGENT = "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1)"
 
     socket.setdefaulttimeout(10)
 
