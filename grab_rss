@@ -7,6 +7,7 @@ import urllib2
 import sys
 import os
 import smtplib
+import socket
 
 from email.MIMEText import MIMEText
 from django.utils.encoding import smart_str
@@ -73,36 +74,50 @@ def body_for(entry):
         '\xc3\xa1': 'a',
         '\xc2\xa0': '',
         '\xbb': '>>',
-        '&#160;': ' ',
+        '&#38;': '&',
+        '&#60;': '<',
+        '&#62;': '>',
+        '&#xA0;': ' ',
+        '&#8216;': '\'',
         '&#8217;': '\'',
         '&#8220;': '\'',
         '&#8221;': '\'',
+        '&#8212;': '--',
+        '&#8243;': '"',
         }
 
-    s = smart_str(entry.link + "\n\n" + entry.description)
+    s = smart_str(entry.link + '\n\n' + entry.get('description', ''))
 
     for (coded,char) in encodings.items():
         s = s.replace(coded, char)
 
     return wrap(stripogram.html2safehtml(s, valid_tags=('a')), 80)
 
+def feed_name(feed, feed_url):
+    try:
+        return feed['feed']['title']
+    except:
+        return feed_url.split('/')[3]
+
 def grab_feeds():
     state = seen_items(os.path.join(conf_dir(), 'seen.txt'))
 
-    hostname = os.uname()[1]
+    hostname = socket.gethostname()
 
     for feed_url in feedlist():
         feed = feedparser.parse(feed_url)
 
-        feed_title = feed['feed']['title']
+        feed_title = feed_name(feed, feed_url)
 
         for entry in feed.entries:
             if state.seen_this_before(entry.link):
                 continue
 
+            title = entry.get('title', entry.link)
+
             msg = MIMEText(body_for(entry))
             msg['X-GrabRSS'] = hostname
-            msg['Subject'] = '%s - %s' % (feed_title, entry.title)
+            msg['Subject'] = '%s - %s' % (feed_title, title)
             msg['From'] = 'grab-rss@randombit.net'
             msg['To'] = 'lloyd@randombit.net'
             yield msg
@@ -114,9 +129,14 @@ def main(args = None):
     if args is None:
         args = sys.argv
 
+    socket.setdefaulttimeout(10)
+
+    smtp = smtplib.SMTP('mail.randombit.net')
+
     for email in grab_feeds():
-        print email
-        print "\n"
+        smtp.sendmail(email['From'], [email['To']], email.as_string())
+
+    smtp.quit()
 
 if __name__ == '__main__':
     #try:
