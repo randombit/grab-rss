@@ -1,16 +1,31 @@
 #!/usr/bin/python
 
-import dateutil.parser
-import feedparser
+"""
+Dependencies:
+  dateutil.parser - http://labix.org/python-dateutil
+  feedparser      - http://www.feedparser.org
+  stripogram      - http://www.zope.org/Members/chrisw/StripOGram
+  django          - http://www.djangoproject.com
+"""
+
+__copyright__ = "Copyright 2010, Jack Lloyd"
+__license__   = "GPLv2"
+__author__    = "Jack Lloyd"
+__version__   = "0.1"
+__email__     = "lloyd@randombit.net"
+
 import logging
 import multiprocessing
 import optparse
 import os
 import smtplib
 import socket
-import stripogram
 import sys
 import ConfigParser
+
+import dateutil.parser
+import feedparser
+import stripogram
 
 from email.MIMEText import MIMEText
 from django.utils.encoding import smart_str
@@ -174,7 +189,7 @@ def main(argv = None):
     if argv is None:
         argv = sys.argv
 
-    parser = optparse.OptionParser(version='%prog 0.1')
+    parser = optparse.OptionParser(version='%%prog %s' % (__version__))
 
     parser.add_option('-v', '--verbose', dest='verbose',
                       action='store_true', default=False)
