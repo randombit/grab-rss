@@ -101,17 +101,8 @@ def wrap(text, width):
                   text.split(' ')
                  )
 
-def body_for(entry):
-
-    # Random chars observered that smart_str fails on
+def escape_encodings(s):
     encodings = {
-        '\xe2\x80\x93': '\'',
-        '\xe2\x80\x99': '\'',
-        '\xe2\x80\x9c': '\'',
-        '\xe2\x80\x9d': '\'',
-        '\xc3\xa1': 'a',
-        '\xc2\xa0': '',
-        '\xbb': '>>',
         '&#38;': '&',
         '&#038;': '&',
         '&#60;': '<',
@@ -125,13 +116,32 @@ def body_for(entry):
         '&#8243;': '"',
         }
 
+    for (coded,char) in encodings.items():
+        s = s.replace(coded, char)
+
+    return s
+
+def body_for(entry):
+
     timestamp = str(dateutil.parser.parse(entry.get('date', '')))
 
     s = timestamp + '\n\n' + smart_str(entry.link + '\n\n' +
                                        entry.get('description', ''))
 
-    for (coded,char) in encodings.items():
+    utf8_encodings = {
+        '\xe2\x80\x93': '\'',
+        '\xe2\x80\x99': '\'',
+        '\xe2\x80\x9c': '\'',
+        '\xe2\x80\x9d': '\'',
+        '\xc3\xa1': 'a',
+        '\xc2\xa0': '',
+        '\xbb': '>>'
+        }
+
+    for (coded,char) in utf8_encodings.items():
         s = s.replace(coded, char)
+
+    s = escape_encodings(s)
 
     return wrap(stripogram.html2safehtml(s, valid_tags=('a')), 80)
 
@@ -173,7 +183,7 @@ def grab_feeds(config):
 
             msg = MIMEText(body_for(entry))
             msg['X-GrabRSS'] = socket.gethostname()
-            msg['Subject'] = '%s - %s' % (feed_title, title)
+            msg['Subject'] = escape_encodings('%s - %s' % (feed_title, title))
             msg['From'] = config.get('GrabRSS', 'from')
             msg['To'] = config.get('GrabRSS', 'to')
             yield msg
