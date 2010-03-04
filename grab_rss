@@ -24,12 +24,16 @@ import socket
 import sys
 import ConfigParser
 
-import dateutil.parser
 import feedparser
 import stripogram
 
 from email.MIMEText import MIMEText
 from django.utils.encoding import smart_str
+
+try:
+    from dateutil.parser import parser as date_parser
+except ImportError:
+    def date_parser(string): return string # leave it unchanged
 
 def conf_dir():
     if os.getenv('GRAB_RSS_DIR'):
@@ -80,8 +84,12 @@ class seen_items:
     def save(self):
         output = open(self.filename, 'w')
         for entry in sorted(self.all_seen):
-            output.write(entry)
-            output.write('\n')
+            try:
+                output.write(entry)
+                output.write('\n')
+            except Exception, e:
+                print entry[0:43]
+                logging.warning('Failed while saving %s (%s)' % (entry, str(e)))
         output.close()
 
     def seen_this_before(self, item):
@@ -114,6 +122,7 @@ def escape_encodings(s):
         '&#8221;': '\'',
         '&#8212;': '--',
         '&#8243;': '"',
+        '&#64257;': 'fi',
         }
 
     for (coded,char) in encodings.items():
@@ -123,7 +132,7 @@ def escape_encodings(s):
 
 def body_for(entry):
 
-    timestamp = str(dateutil.parser.parse(entry.get('date', '')))
+    timestamp = str(date_parser(entry.get('date', '')))
 
     s = timestamp + '\n\n' + smart_str(entry.link + '\n\n' +
                                        entry.get('description', ''))
@@ -158,10 +167,11 @@ def parse_feed(url):
 def grab_feeds(config):
     state = seen_items(os.path.join(conf_dir(), 'seen.txt'))
 
-    pool = multiprocessing.Pool(config.getint('GrabRSS', 'pool_size'))
-
-    # Use multiprocessing's Pool.map? (Broken on chihiro... :/)
-    all_feeds = dict(pool.map(parse_feed, feedlist()))
+    if config.getint('GrabRSS', 'pool_size') == 0:
+        all_feeds = dict(map(parse_feed, feedlist()))
+    else:
+        pool = multiprocessing.Pool(config.getint('GrabRSS', 'pool_size'))
+        all_feeds = dict(pool.map(parse_feed, feedlist()))
 
     for (feed_url, feed) in all_feeds.items():
         feed_title = feed_name(feed, feed_url)
@@ -194,7 +204,7 @@ def grab_feeds(config):
 
         logging.debug('Saw %d new items from %s' % (new_entries, feed_url))
 
-        state.save()
+    state.save()
 
 def main(argv = None):
     if argv is None:
