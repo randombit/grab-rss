@@ -37,49 +37,47 @@ I'm using it as my only RSS source, and I'm happy with it.
 What's missing?
 
 No provision for HTML mail. Everything is converted to text/plain,
-stripping out everything except links.
+stripping out everything except links. I hate HTML mail.
 
-Charset support is weak; if it's pure ASCII or UTF-8 it will probably
-work, and there are a few special-case hacks to fix specific charset
-problems in the blogs I read. It's quite likely it will not do the
-right thing if you point it at a blog written in Korean or Thai or
-even German for that matter.
+Charset support is weak; it basically strips everything down to ASCII,
+because that happens to be the most useful thing for me.
 
 Probably other things that haven't even occured to me. Suggestions
 welcome, patches better.
 
 What do I need?
 
-Currently you need Python 2.6 plus the following:
-  dateutil.parser - http://labix.org/python-dateutil
+Currently you need Python 2.6 (2.4/2.5 might work, haven't tried) plus
+the following dependencies:
+
+Required:
   feedparser      - http://www.feedparser.org
   stripogram      - http://www.zope.org/Members/chrisw/StripOGram
-  django          - http://www.djangoproject.com
+
+Optional:
+  dateutil.parser - http://labix.org/python-dateutil
 
 Patches to reduce dependencies while improving or maintaining
-functionality happily accepted. (Especially Django, only used for
-smart_str and it's pretty big - just happens to already be installed
-on the machine I run grab_rss on, and I'm lazy so I used it).
+functionality happily accepted.
 
 All the dependencies are included in Gentoo:
 
   emerge dev-python/python-dateutil \
          dev-python/feedparser \
-         dev-python/stripogram \
-         dev-python/django
+         dev-python/stripogram
 
 and in Debian:
 
   apt-get install zope-stripogram \
                   python-dateutil \
-                  python-feedparser \
-                  python-django
+                  python-feedparser
 
 and probably in most other reasonably sane Linux distros.
 
 How do I use it?
 
 grab_rss uses 3 files, which are located in either $GRAB_RSS_DIR or ~/.grab_rss:
+
   - grab_rss.conf: A configuration file (see more about that below)
 
   - feeds.txt: A list of feed locations, one per line. Like so:
@@ -90,8 +88,8 @@ http://randombit.net/bitbashing/index.atom
 http://taint.org/feed
 """
 
-  - seen.txt: A list of already read/sent posts (you shouldn't need to
-    create or edit this, the program will handle it for you)
+  - seen.db: A sqlite database listing already seen/sent posts
+    (you shouldn't need to ever look at this)
 
 What do I put in grab_rss.conf?
 
@@ -121,7 +119,8 @@ with 1 process to under 10 seconds with 6 procs; further increases in
 pool size didn't decrease runtimes). The optimal size will depend a
 lot on your local hardware and network as well as how many feeds you
 are trying to get (and all of their hardware and networks). The
-default pool size is 4 processes.
+default pool size is 0, which means don't use the multiprocessing
+module.
 
 The default socket timeout is 30 seconds, which is probably fine
 unless you have a very wonky network or are running only a single
@@ -137,13 +136,14 @@ to do at least a third of the time.
 How do I filter this?
 
 You can filter by the sender (set in grab_rss.conf) and/or the
-existence of the header X-GrabRSS. The value of X-GrabRSS is set to
-the hostname where grab_rss is running, if for some odd reason you are
-running it on multiple hosts (mostly because I couldn't think of a
-more useful value to put there). In procmail speak:
+existence of the header X-GrabRSS-Feed. The value of X-GrabRSS-Feed is
+set to the URL of the feed that this post was sent by, if you want
+to filter posts to different mboxes based on source.
+
+In procmail speak:
 
 :0:
-* ^X-GrabRSS:
+* ^X-GrabRSS-Feed:
 RSSFeeds
 
 Can I reuse this?
