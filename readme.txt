@@ -2,9 +2,9 @@
 grab_rss is a simple RSS to email gateway; it downloads feeds (RSS,
 Atom, or anything else Universal Feed Parser understands), formats
 them into plaintext emails, and sends them to you. The idea would be
-to run it once an hour in a cron job.
+to run it once an hour or once a day or whatever in a cron job.
 
-Why write this?
+* Why write this?
 
 I had been using Google Reader. Mutt is a better information organizer
 than Reader, and since I run my own mail server there are fewer
@@ -18,7 +18,7 @@ very slow or a combination of the three. So I ended up writing this
 brand new buggy, incomplete and very slow program instead. Your own
 ugly babies are always the cutest ones.
 
-Why not just use rss2email?
+* Why not just use rss2email?
 
 Using pickle for the state is obnoxious - hard to read, edit, or
 save/merge using version control. I strongly prefer plain text for
@@ -28,16 +28,20 @@ data, and quality editors to modify them as necessary.
 
 In short: die, binary data, die in a fire.
 
-What's there?
+(And then I realized it was far better to save the seen items state in
+a sqlite db than a plain text file in case an exception is thrown and
+we revert state. Hypocrisy rocks!)
+
+* What's there?
 
 All the basic functionality works: it reads RSS feeds, sends you
 emails about them, remembers which ones it has already told you about.
 I'm using it as my only RSS source, and I'm happy with it.
 
-What's missing?
+* What's missing?
 
 No provision for HTML mail. Everything is converted to text/plain,
-stripping out everything except links. I hate HTML mail.
+stripping out everything except links.
 
 Charset support is weak; it basically strips everything down to ASCII,
 because that happens to be the most useful thing for me.
@@ -45,7 +49,7 @@ because that happens to be the most useful thing for me.
 Probably other things that haven't even occured to me. Suggestions
 welcome, patches better.
 
-What do I need?
+* What do I need?
 
 Currently you need Python 2.6 (2.4/2.5 might work, haven't tried) plus
 the following dependencies:
@@ -74,7 +78,7 @@ and in Debian:
 
 and probably in most other reasonably sane Linux distros.
 
-How do I use it?
+* How do I use it?
 
 grab_rss uses 3 files, which are located in either $GRAB_RSS_DIR or ~/.grab_rss:
 
@@ -91,7 +95,7 @@ http://taint.org/feed
   - seen.db: A sqlite database listing already seen/sent posts
     (you shouldn't need to ever look at this)
 
-What do I put in grab_rss.conf?
+* What do I put in grab_rss.conf?
 
 The only required item is what email address you want the output sent to:
 
@@ -113,14 +117,17 @@ user_agent = Lynx/2.8.7
 """
 
 The pool_size specifies how many processes to use for downloading
-feeds. Running several downloads in parallel can substantially speed
-up how fast grab_rss runs (for my 60 feeds, from just under a minute
-with 1 process to under 10 seconds with 6 procs; further increases in
-pool size didn't decrease runtimes). The optimal size will depend a
-lot on your local hardware and network as well as how many feeds you
-are trying to get (and all of their hardware and networks). The
-default pool size is 0, which means don't use the multiprocessing
-module.
+feeds (using the multiprocessing module, which means you have to have
+Python 2.6 or have installed it specially for this to work)
+
+Running several downloads in parallel can substantially speed up how
+fast grab_rss runs (for my 60-something feeds, from just under a
+minute with 1 process to under 10 seconds with 6 procs; further
+increases in pool size didn't decrease runtimes (on a quad-core)). The
+optimal size will depend a lot on your local hardware and network as
+well as how many feeds you are trying to get (and all of their
+hardware and networks). The default pool size is 0, which means don't
+use the multiprocessing module at all.
 
 The default socket timeout is 30 seconds, which is probably fine
 unless you have a very wonky network or are running only a single
@@ -133,12 +140,15 @@ the SMTP timeout, though I haven't encountered any problems with that.
 The SMTP host defaults to localhost which is probably the right thing
 to do at least a third of the time.
 
-How do I filter this?
+No provisions for SMTP authentication currently, might be useful but I
+don't need it so I haven't written it.
+
+* How do I filter this?
 
 You can filter by the sender (set in grab_rss.conf) and/or the
 existence of the header X-GrabRSS-Feed. The value of X-GrabRSS-Feed is
-set to the URL of the feed that this post was sent by, if you want
-to filter posts to different mboxes based on source.
+set to the URL of the feed that this post was from, if you want to
+filter posts to different mboxes based on source.
 
 In procmail speak:
 
@@ -146,7 +156,7 @@ In procmail speak:
 * ^X-GrabRSS-Feed:
 RSSFeeds
 
-Can I reuse this?
+* Can I reuse this?
 
 Sure. License is stock GPLv2. If you need it under some other license
 for some reason, contact me.
