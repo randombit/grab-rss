@@ -11,7 +11,7 @@ Dependencies:
 __copyright__ = 'Copyright 2010, Jack Lloyd'
 __license__   = 'GPLv2'
 __author__    = 'Jack Lloyd'
-__version__   = '0.1'
+__version__   = '0.2'
 __email__     = 'lloyd@randombit.net'
 __url__       = 'http://www.randombit.net/bitbashing/grab_rss'
 
