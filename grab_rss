@@ -166,7 +166,7 @@ def grab_feeds(config):
             title = entry.get('title', entry.link)
 
             msg = MIMEText(body_for(entry))
-            msg['X-GrabRSS'] = socket.gethostname()
+            msg['X-GrabRSS-Feed'] = feed_url
             msg['Subject'] = force_to_ascii('%s - %s' % (feed_title, title))
             msg['From'] = config.get('GrabRSS', 'from')
             msg['To'] = config.get('GrabRSS', 'to')
