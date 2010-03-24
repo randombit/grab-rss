@@ -25,6 +25,7 @@ import ConfigParser
 import sqlite3
 import re
 import unicodedata
+import time
 
 import feedparser
 import stripogram
@@ -77,10 +78,18 @@ def read_config():
 
 class seen_items:
     def __init__(self, filename):
-
         self.db = sqlite3.connect(filename)
         self.cursor = self.db.cursor()
-        self.cursor.execute('create table if not exists seen (url text)')
+        self.cursor.execute('create table if not exists seen (timestamp integer, url text)')
+
+    def save(self):
+        self.db.commit()
+
+    def remove_older_than(self, days):
+        long_ago = int(time.time()) - int(days)*24*60
+
+        self.cursor.execute('delete from seen where timestamp <= ?', [long_ago])
+        return self.cursor.rowcount
 
     def seen_this_before(self, item):
         self.cursor.execute('select * from seen where url = ?', [item])
@@ -88,8 +97,8 @@ class seen_items:
         return len(there) > 0
 
     def note_as_seen(self, item):
-        self.cursor.execute('insert into seen values(?)', [item])
-        self.db.commit()
+        now = int(time.time())
+        self.cursor.execute('insert into seen values(?, ?)', [now, item])
 
 def wrap(text, width):
     # From http://code.activestate.com/recipes/148061/
@@ -135,8 +144,7 @@ def parse_feed(url):
     logging.info('Reading %s' % (url))
     return (url, feedparser.parse(url))
 
-def grab_feeds(config):
-    state = seen_items(os.path.join(conf_dir(), 'seen.db'))
+def grab_feeds(state, config):
 
     pool_size = config.getint('GrabRSS', 'pool_size')
 
@@ -185,10 +193,19 @@ def main(argv = None):
     parser = optparse.OptionParser(version='%%prog %s' % (__version__))
 
     parser.add_option('-v', '--verbose', dest='verbose',
-                      action='store_true', default=False)
+                      action='store_true', default=False,
+                      help='be loud')
 
     parser.add_option('-q', '--quiet', dest='quiet',
-                      action='store_true', default=False)
+                      action='store_true', default=False,
+                      help='be quiet')
+
+    parser.add_option('--dont-send', action='store_true', default=False,
+                      help="don't actually send email")
+
+    parser.add_option('--remove-older-than', dest='remove_older_than',
+                      metavar='N',
+                      help='remove seen.db entries older than N days')
 
     (options, args) = parser.parse_args(argv)
 
@@ -214,10 +231,21 @@ def main(argv = None):
 
     logging.debug('Sending mail to %s' % (smtp_host))
 
+    state = seen_items(os.path.join(conf_dir(), 'seen.db'))
+
+    if options.remove_older_than:
+        removed = state.remove_older_than(options.remove_older_than)
+        logging.info('Removed %d old items' % (removed))
+        state.save()
+        return
+
     smtp = smtplib.SMTP(smtp_host)
 
-    for email in grab_feeds(config):
-        smtp.sendmail(email['From'], [email['To']], email.as_string())
+    for email in grab_feeds(state, config):
+        if not options.dont_send:
+            smtp.sendmail(email['From'], [email['To']], email.as_string())
+
+    state.save()
 
     smtp.quit()
 
