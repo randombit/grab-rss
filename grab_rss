@@ -144,9 +144,7 @@ def parse_feed(url):
     logging.info('Reading %s' % (url))
     return (url, feedparser.parse(url))
 
-def grab_feeds(state, config):
-
-    pool_size = config.getint('GrabRSS', 'pool_size')
+def grab_feeds(state, pool_size):
 
     if pool_size == 0:
         all_feeds = dict(map(parse_feed, feedlist()))
@@ -176,8 +174,6 @@ def grab_feeds(state, config):
             msg = MIMEText(body_for(entry))
             msg['X-GrabRSS-Feed'] = feed_url
             msg['Subject'] = force_to_ascii('%s - %s' % (feed_title, title))
-            msg['From'] = config.get('GrabRSS', 'from')
-            msg['To'] = config.get('GrabRSS', 'to')
             yield msg
 
             new_entries += 1
@@ -207,6 +203,9 @@ def main(argv = None):
                       metavar='N',
                       help='remove seen.db entries older than N days')
 
+    parser.add_option('--pool-size', metavar='N',
+                      help='use N processes for pulling down feeds in parallel')
+
     (options, args) = parser.parse_args(argv)
 
     def log_level():
@@ -225,6 +224,8 @@ def main(argv = None):
     socket.setdefaulttimeout(config.getint('GrabRSS', 'socket_timeout'))
     feedparser.USER_AGENT = config.get('GrabRSS', 'user_agent')
 
+    pool_size = int(options.pool_size or config.get('GrabRSS', 'pool_size'))
+
     socket.setdefaulttimeout(10)
 
     smtp_host = config.get('GrabRSS', 'smtp_host')
@@ -241,8 +242,10 @@ def main(argv = None):
 
     smtp = smtplib.SMTP(smtp_host)
 
-    for email in grab_feeds(state, config):
+    for email in grab_feeds(state, pool_size):
         if not options.dont_send:
+            email['From'] = config.get('GrabRSS', 'from')
+            email['To'] = config.get('GrabRSS', 'to')
             smtp.sendmail(email['From'], [email['To']], email.as_string())
 
     state.save()
