@@ -118,16 +118,17 @@ user_agent = Lynx/2.8.7
 
 The pool_size specifies how many processes to use for downloading
 feeds (using the multiprocessing module, which means you have to have
-Python 2.6 or have installed it specially for this to work)
+Python 2.6 or have installed it specially for this to work).
 
 Running several downloads in parallel can substantially speed up how
 fast grab_rss runs (for my 60-something feeds, from just under a
-minute with 1 process to under 10 seconds with 6 procs; further
-increases in pool size didn't decrease runtimes (on a quad-core)). The
-optimal size will depend a lot on your local hardware and network as
-well as how many feeds you are trying to get (and all of their
-hardware and networks). The default pool size is 0, which means don't
-use the multiprocessing module at all.
+minute with 1 process to under 10 seconds with 8 procs; further
+increases in pool size didn't decrease runtimes). The optimal size
+will depend a lot on your local hardware and network as well as how
+many feeds you are trying to get (and all of their hardware and
+networks). The default pool size is 0, which means don't use the
+multiprocessing module at all. Play with the --pool-size option if you
+want to experiment.
 
 The default socket timeout is 30 seconds, which is probably fine
 unless you have a very wonky network or are running only a single

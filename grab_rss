@@ -50,10 +50,10 @@ def conf_dir():
 def feedlist():
     feed_file = os.path.join(conf_dir(), 'feeds.txt')
 
-    logging.info('Reading feed list from %s' % (feed_file))
-
     try:
-        return map(lambda s: s.strip(), open(feed_file).readlines())
+        feeds = open(feed_file).readlines()
+        logging.info('Read %d feeds from %s' % (len(feeds), feed_file))
+        return map(lambda s: s.strip(), feeds)
     except IOError:
         raise Exception('No feeds found in %s' % (feed_file))
 
@@ -134,15 +134,22 @@ def body_for(entry):
 
     return '\n\n'.join([timestamp, link, descr])
 
-def feed_name(feed, feed_url):
-    try:
-        return feed['feed']['title']
-    except:
-        return feed_url.split('/')[3]
-
 def parse_feed(url):
     logging.info('Reading %s' % (url))
-    return (url, feedparser.parse(url))
+
+    def feed_name(feed, feed_url):
+        try:
+            return feed['feed']['title']
+        except:
+            return feed_url.split('/')[3]
+
+    # Don't return feed directly, PyCObjects are unpicklable and this
+    # makes multiprocessing very unhappy
+    feed = feedparser.parse(url)
+
+    name = feed_name(feed, url)
+
+    return (url, (name, feed.entries))
 
 def grab_feeds(state, pool_size):
 
@@ -153,10 +160,8 @@ def grab_feeds(state, pool_size):
         pool = multiprocessing.Pool(pool_size)
         all_feeds = dict(pool.map(parse_feed, feedlist()))
 
-    for (feed_url, feed) in all_feeds.items():
-        feed_title = feed_name(feed, feed_url)
-
-        num_entries = len(feed.entries)
+    for (feed_url, (feed_title, feed)) in all_feeds.items():
+        num_entries = len(feed)
 
         if num_entries:
             logging.debug('Found %d entries in %s' % (num_entries, feed_url))
@@ -165,11 +170,13 @@ def grab_feeds(state, pool_size):
 
         new_entries = 0
 
-        for entry in feed.entries:
-            if state.seen_this_before(entry.link):
+        for entry in feed:
+            link = entry['link']
+
+            if state.seen_this_before(link):
                 continue
 
-            title = entry.get('title', entry.link)
+            title = entry.get('title', link)
 
             msg = MIMEText(body_for(entry))
             msg['X-GrabRSS-Feed'] = feed_url
