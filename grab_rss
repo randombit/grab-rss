@@ -16,24 +16,30 @@ __email__     = 'lloyd@randombit.net'
 __url__       = 'http://www.randombit.net/bitbashing/grab_rss'
 
 import logging
-import multiprocessing
 import optparse
 import os
 import smtplib
 import socket
 import sys
 import ConfigParser
+import sqlite3
+import re
+import unicodedata
 
 import feedparser
 import stripogram
 
 from email.MIMEText import MIMEText
-from django.utils.encoding import smart_str
 
 try:
-    from dateutil.parser import parser as date_parser
+    import dateutil.parser
+
+    def parse_date(date_string):
+        dt = dateutil.parser.parse(date_string)
+        return dt.strftime('%Y-%m-%d %H:%M')
+
 except ImportError:
-    def date_parser(string): return string # leave it unchanged
+    def parse_date(date_string): return date_string # leave it unchanged
 
 def conf_dir():
     if os.getenv('GRAB_RSS_DIR'):
@@ -57,7 +63,7 @@ def read_config():
             'smtp_host': 'localhost',
             'socket_timeout': '30',
             'user_agent': 'grab_rss ' + __version__ + ' ' + __url__,
-            'pool_size': 4
+            'pool_size': 0
         })
 
     config_file = os.path.join(conf_dir(), 'grab_rss.conf')
@@ -71,32 +77,19 @@ def read_config():
 
 class seen_items:
     def __init__(self, filename):
-        self.all_seen = set()
-        self.filename = filename
 
-        try:
-            input = open(self.filename)
-            for line in input:
-                self.all_seen.add(line.strip())
-        except IOError:
-            pass
-
-    def save(self):
-        output = open(self.filename, 'w')
-        for entry in sorted(self.all_seen):
-            try:
-                output.write(entry)
-                output.write('\n')
-            except Exception, e:
-                print entry[0:43]
-                logging.warning('Failed while saving %s (%s)' % (entry, str(e)))
-        output.close()
+        self.db = sqlite3.connect(filename)
+        self.cursor = self.db.cursor()
+        self.cursor.execute('create table if not exists seen (url text)')
 
     def seen_this_before(self, item):
-        return item in self.all_seen
+        self.cursor.execute('select * from seen where url = ?', [item])
+        there = self.cursor.fetchall()
+        return len(there) > 0
 
     def note_as_seen(self, item):
-        self.all_seen.add(item)
+        self.cursor.execute('insert into seen values(?)', [item])
+        self.db.commit()
 
 def wrap(text, width):
     # From http://code.activestate.com/recipes/148061/
@@ -109,50 +102,28 @@ def wrap(text, width):
                   text.split(' ')
                  )
 
-def escape_encodings(s):
-    encodings = {
-        '&#38;': '&',
-        '&#038;': '&',
-        '&#60;': '<',
-        '&#62;': '>',
-        '&#xA0;': ' ',
-        '&#8216;': '\'',
-        '&#8217;': '\'',
-        '&#8220;': '\'',
-        '&#8221;': '\'',
-        '&#8212;': '--',
-        '&#8243;': '"',
-        '&#64257;': 'fi',
-        }
+def force_to_ascii(s):
+    def replace_char(matches):
+        u = matches.group(1)
+        try:
+            return unichr(int(u))
+        except:
+            return u
 
-    for (coded,char) in encodings.items():
-        s = s.replace(coded, char)
+    s = re.sub("&#(\d+)(;|(?=\s))", replace_char, s)
 
-    return s
+    return unicodedata.normalize('NFKD', unicode(s)).encode('ascii', 'ignore')
 
 def body_for(entry):
+    timestamp = parse_date(entry.get('date', ''))
 
-    timestamp = str(date_parser(entry.get('date', '')))
+    link = force_to_ascii(entry.link)
 
-    s = timestamp + '\n\n' + smart_str(entry.link + '\n\n' +
-                                       entry.get('description', ''))
+    descr = wrap(stripogram.html2safehtml(
+        force_to_ascii(entry.get('description', '')),
+        valid_tags=('a')), 80)
 
-    utf8_encodings = {
-        '\xe2\x80\x93': '\'',
-        '\xe2\x80\x99': '\'',
-        '\xe2\x80\x9c': '\'',
-        '\xe2\x80\x9d': '\'',
-        '\xc3\xa1': 'a',
-        '\xc2\xa0': '',
-        '\xbb': '>>'
-        }
-
-    for (coded,char) in utf8_encodings.items():
-        s = s.replace(coded, char)
-
-    s = escape_encodings(s)
-
-    return wrap(stripogram.html2safehtml(s, valid_tags=('a')), 80)
+    return '\n\n'.join([timestamp, link, descr])
 
 def feed_name(feed, feed_url):
     try:
@@ -165,12 +136,15 @@ def parse_feed(url):
     return (url, feedparser.parse(url))
 
 def grab_feeds(config):
-    state = seen_items(os.path.join(conf_dir(), 'seen.txt'))
+    state = seen_items(os.path.join(conf_dir(), 'seen.db'))
 
-    if config.getint('GrabRSS', 'pool_size') == 0:
+    pool_size = config.getint('GrabRSS', 'pool_size')
+
+    if pool_size == 0:
         all_feeds = dict(map(parse_feed, feedlist()))
     else:
-        pool = multiprocessing.Pool(config.getint('GrabRSS', 'pool_size'))
+        import multiprocessing
+        pool = multiprocessing.Pool(pool_size)
         all_feeds = dict(pool.map(parse_feed, feedlist()))
 
     for (feed_url, feed) in all_feeds.items():
@@ -193,7 +167,7 @@ def grab_feeds(config):
 
             msg = MIMEText(body_for(entry))
             msg['X-GrabRSS'] = socket.gethostname()
-            msg['Subject'] = escape_encodings('%s - %s' % (feed_title, title))
+            msg['Subject'] = force_to_ascii('%s - %s' % (feed_title, title))
             msg['From'] = config.get('GrabRSS', 'from')
             msg['To'] = config.get('GrabRSS', 'to')
             yield msg
@@ -203,8 +177,6 @@ def grab_feeds(config):
             state.note_as_seen(entry.link)
 
         logging.debug('Saw %d new items from %s' % (new_entries, feed_url))
-
-    state.save()
 
 def main(argv = None):
     if argv is None:
