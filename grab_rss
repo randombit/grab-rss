@@ -150,7 +150,7 @@ def parse_feed(url):
 
     name = feed_name(feed, url)
 
-    return (url, (name, feed.entries))
+    return (url, name, feed.entries)
 
 def pool_map(pool_size, func, args):
     if pool_size > 0:
@@ -162,9 +162,9 @@ def pool_map(pool_size, func, args):
 
 def grab_feeds(state, pool_size):
 
-    all_feeds = dict(pool_map(pool_size, parse_feed, feedlist()))
+    all_feeds = pool_map(pool_size, parse_feed, feedlist())
 
-    for (feed_url, (feed_title, feed)) in all_feeds.items():
+    for (feed_url, feed_title, feed) in all_feeds:
         num_entries = len(feed)
 
         if num_entries:
