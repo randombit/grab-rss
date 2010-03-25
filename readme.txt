@@ -41,10 +41,10 @@ I'm using it as my only RSS source, and I'm happy with it.
 * What's missing?
 
 No provision for HTML mail. Everything is converted to text/plain,
-stripping out everything except links.
+stripping out everything except links. I don't like HTML mail.
 
-Charset support is weak; it basically strips everything down to ASCII,
-because that happens to be the most useful thing for me.
+If you want to read anything that's not written in mostly ASCII you're
+out of luck; all input text is forced to 7-bit ASCII.
 
 Probably other things that haven't even occured to me. Suggestions
 welcome, patches better.
@@ -60,6 +60,9 @@ Required:
 
 Optional:
   dateutil.parser - http://labix.org/python-dateutil
+  multiprocessing - http://code.google.com/p/python-multiprocessing/
+
+The multiprocessing module is included in Python 2.6
 
 Patches to reduce dependencies while improving or maintaining
 functionality happily accepted.
