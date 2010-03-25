@@ -1,34 +1,36 @@
 #!/usr/bin/python
 
-"""
-Dependencies:
-  dateutil.parser - http://labix.org/python-dateutil
-  feedparser      - http://www.feedparser.org
-  stripogram      - http://www.zope.org/Members/chrisw/StripOGram
-  django          - http://www.djangoproject.com
-"""
-
 __copyright__ = 'Copyright 2010, Jack Lloyd'
 __license__   = 'GPLv2'
 __author__    = 'Jack Lloyd'
 __version__   = '0.2'
 __email__     = 'lloyd@randombit.net'
-__url__       = 'http://www.randombit.net/bitbashing/grab_rss'
+__url__       = 'http://www.randombit.net/code/grab_rss'
+
+"""
+Dependencies:
+  feedparser      - http://www.feedparser.org
+  stripogram      - http://www.zope.org/Members/chrisw/StripOGram
+
+Optional:
+  dateutil.parser - http://labix.org/python-dateutil
+  multiprocessing - http://code.google.com/p/python-multiprocessing/
+"""
+
+import feedparser
+import stripogram
 
 import logging
 import optparse
 import os
+import re
 import smtplib
 import socket
-import sys
-import ConfigParser
 import sqlite3
-import re
-import unicodedata
+import sys
 import time
-
-import feedparser
-import stripogram
+import unicodedata
+import ConfigParser
 
 from email.MIMEText import MIMEText
 
@@ -38,7 +40,6 @@ try:
     def parse_date(date_string):
         dt = dateutil.parser.parse(date_string)
         return dt.strftime('%Y-%m-%d %H:%M')
-
 except ImportError:
     def parse_date(date_string): return date_string # leave it unchanged
 
@@ -151,14 +152,17 @@ def parse_feed(url):
 
     return (url, (name, feed.entries))
 
-def grab_feeds(state, pool_size):
-
-    if pool_size == 0:
-        all_feeds = dict(map(parse_feed, feedlist()))
-    else:
+def pool_map(pool_size, func, args):
+    if pool_size > 0:
         import multiprocessing
         pool = multiprocessing.Pool(pool_size)
-        all_feeds = dict(pool.map(parse_feed, feedlist()))
+        return pool.map(func, args)
+    else:
+        return map(func, args)
+
+def grab_feeds(state, pool_size):
+
+    all_feeds = dict(pool_map(pool_size, parse_feed, feedlist()))
 
     for (feed_url, (feed_title, feed)) in all_feeds.items():
         num_entries = len(feed)
@@ -260,7 +264,4 @@ def main(argv = None):
     smtp.quit()
 
 if __name__ == '__main__':
-    #try:
     sys.exit(main())
-    #except Exception, e:
-    #    print >>sys.stderr, e
