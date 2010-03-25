@@ -129,9 +129,11 @@ def body_for(entry):
 
     link = force_to_ascii(entry.link)
 
-    descr = wrap(stripogram.html2safehtml(
-        force_to_ascii(entry.get('description', '')),
-        valid_tags=('a')), 80)
+    descr = wrap(
+        stripogram.html2safehtml(
+            force_to_ascii(entry.get('description', '')),
+            valid_tags=('a')),
+        80)
 
     return '\n\n'.join([timestamp, link, descr])
 
@@ -236,8 +238,6 @@ def main(argv = None):
     feedparser.USER_AGENT = config.get('GrabRSS', 'user_agent')
 
     pool_size = int(options.pool_size or config.get('GrabRSS', 'pool_size'))
-
-    socket.setdefaulttimeout(10)
 
     smtp_host = config.get('GrabRSS', 'smtp_host')
 
