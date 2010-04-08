@@ -52,9 +52,9 @@ def feedlist():
     feed_file = os.path.join(conf_dir(), 'feeds.txt')
 
     try:
-        feeds = open(feed_file).readlines()
+        feeds = [s.strip() for s in open(feed_file).readlines() if not s.startswith('#')]
         logging.info('Read %d feeds from %s' % (len(feeds), feed_file))
-        return map(lambda s: s.strip(), feeds)
+        return feeds
     except IOError:
         raise Exception('No feeds found in %s' % (feed_file))
 
@@ -191,7 +191,7 @@ def grab_feeds(state, pool_size):
 
             new_entries += 1
 
-            state.note_as_seen(entry.link)
+            state.note_as_seen(link)
 
         logging.debug('Saw %d new items from %s' % (new_entries, feed_url))
 
