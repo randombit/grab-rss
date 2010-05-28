@@ -1,3 +1,7 @@
 
+* 0.3, ????-??-??
+ - Fix socket timeouts
+ - Ignore lines starting with '#' in feeds list
+
 * 0.2, 2010-03-25
  - First public release
