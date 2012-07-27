@@ -1,11 +1,11 @@
 #!/usr/bin/python
 
-__copyright__ = 'Copyright 2010, Jack Lloyd'
+__copyright__ = 'Copyright 2010, 2012 Jack Lloyd'
 __license__   = 'GPLv2'
 __author__    = 'Jack Lloyd'
-__version__   = '0.2'
+__version__   = '0.3'
 __email__     = 'lloyd@randombit.net'
-__url__       = 'http://www.randombit.net/code/grab_rss'
+__url__       = 'https://github.com/randombit/grab-rss'
 
 """
 Dependencies:
